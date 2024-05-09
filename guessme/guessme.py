@@ -4,7 +4,7 @@ Jogo baseado no jogo da forca
 
 Modo de utilização:
 
-python3 forca.py
+python3 guessme.py
 
 É necessário o arquivo 'words.txt' estar presente na mesma pasta que
 o programa, contendo uma lista de palavras separadas por linhas
