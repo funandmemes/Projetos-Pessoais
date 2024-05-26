@@ -21,16 +21,22 @@ Ou instale todas de uma vez:
 __author__='funandmemes'
 __version__='0.1.0'
 
+import os
 from tkinter import *
 from tkinter.filedialog import askopenfile
 from PIL import Image, ImageTk
 from mutagen.mp3 import MP3
 from mutagen.easyid3 import EasyID3
 from mutagen.mp4 import MP4, MP4Cover
-from mutagen.id3 import APIC, ID3
+from mutagen.id3 import APIC, ID3, ID3NoHeaderError, PictureType
+from mutagen.oggvorbis import OggVorbis
+from mutagen.oggopus import OggOpus
 import tempfile
 from base64 import b64encode
 import eyed3
+from tinytag import TinyTag
+import base64
+from mutagen.flac import Picture, FLAC
 
 tags = {
     'titulo_m4a': '\xa9nam',
@@ -39,6 +45,12 @@ tags = {
     'titulo_mp3': 'title',
     'artista_mp3': 'artist',
     'album_mp3': 'album',
+    'titulo_ogg': 'title',
+    'artista_ogg': 'artist',
+    'album_ogg': 'album',
+    'titulo_flac': 'title',
+    'artista_flac': 'artist',
+    'album_flac': 'album',
 }
 class main:
     def __init__(self, master):
@@ -46,7 +58,8 @@ class main:
         Label(self.master, text='').grid(row=0)
         self.but = Button(self.master, text='SELECIONAR MÚSICA',
         command=self.abrir_mus).grid(row=1, columnspan=2)
-        Label(self.master, text='').grid(row=2)
+        self.musica_info = Label(self.master, text='', foreground='red')
+        self.musica_info.grid(row=2, columnspan=2)
         self.titulo = Label(self.master, text='Faixa: ').grid(row=3, column=0,
         sticky='e')
         self.titulo_dig = Entry(self.master)
@@ -63,7 +76,8 @@ class main:
         self.capa = Button(self.master, text='SELECIONAR CAPA',
         command=self.abrir_capa)
         self.capa.grid(row=7, columnspan=2)
-        self.capa_info = Label(self.master, text='').grid(row=8)
+        self.capa_info = Label(self.master, text='', foreground='red')
+        self.capa_info.grid(row=8, columnspan=2)
         self.salvar_but = Button(self.master, text='SALVAR',
         command=self.salvar_tags)
         self.salvar_but.grid(row=9, columnspan=2)
@@ -71,9 +85,13 @@ class main:
         
     def abrir_mus(self):
         self.musica = askopenfile(mode='r', filetypes=[('Músicas',
-        '*.m4a *.mp3')])
+        '*.m4a *.mp3 *.opus *.ogg *.flac')])
         if self.musica is not None:     
-            print(self.musica.name)
+            print('Música carregada')
+            nome_musica = os.path.basename(self.musica.name)
+            if len(nome_musica) > 30:
+                nome_musica = nome_musica[:30] + '...'
+            self.musica_info.config(text=f"'{nome_musica}'")
 
     def iniciar_corte(self, event):
         if self.corte_atual:
@@ -97,16 +115,20 @@ class main:
         quadrado = [int(coord) for coord in quadrado]
         self.corte_imagem = self.capa_foto.crop(quadrado)
         self.pronto_salvar = True
-        print('yeeeee boiii')
+        print('Corte pronto para salvar')
 
     def salvar_corte(self):
-        self.corte_imagem.thumbnail((400,400))
-        with tempfile.NamedTemporaryFile(suffix='.jpg', delete = True) as temp:
+        self.corte_imagem.thumbnail((300,300))
+        with tempfile.NamedTemporaryFile(suffix='.png', delete = True) as temp:
             self.corte_imagem.save(temp.name)
-            print('vamo skivamos')
-            with open(temp.name, 'rb') as capa_arquivo:
-                self.capa_final = capa_arquivo.read()
+            print('Imagem cortada')
+            with open(temp.name, 'rb') as self.capa_arquivo:
+                self.capa_final = self.capa_arquivo.read()
         self.segunda.destroy()
+        nome_capa = os.path.basename(self.capa.name)
+        if len(nome_capa) > 30:
+            nome_capa = nome_capa[:30] + '...'
+        self.capa_info.config(text=f"'{nome_capa}'")
 
     def abrir_capa(self):
         self.capa = askopenfile(mode='r', filetypes=[('Imagens', '*.jpg *.png')])
@@ -143,8 +165,8 @@ class main:
             try:
                 capa_audio = [MP4Cover(self.capa_final)]
                 audio['covr'] = capa_audio
-            except Exception:
-                pass
+            except Exception as e:
+                print(f'[ERROR] Unable to change cover: {e}')
         if formato == 'mp3':
             mp3 = MP3(self.musica.name, ID3=ID3)
             mp3.delete()
@@ -159,10 +181,46 @@ class main:
                 desc='Cover', data=self.capa_final))
                 mp3.save()
                 audio = EasyID3(self.musica.name)
-            except Exception:
-                pass
-            except Exception:
-                pass
+            except Exception as e:
+                print(f'[ERROR] Unable to change cover: {e}')
+        if formato == 'ogg':
+            audio = OggVorbis(self.musica.name)
+            audio.delete()
+            try:
+                picture = Picture()
+                picture.data = self.capa_final
+                picture.type = 17
+                picture.mime = u'image/jpeg'
+                picture.width = 300
+                picture.height = 300
+                picture.depth = 24
+                
+                picture_data = picture.write()
+                encoded_data = base64.b64encode(picture_data)
+                vcomment_value = encoded_data.decode('ascii')
+                audio["metadata_block_picture"] = [vcomment_value]
+                audio.save()
+            except Exception as e:
+                print(f'[ERROR] Unable to change cover: {e}')
+        if formato == 'flac':
+            audio = FLAC(self.musica.name)
+            audio.delete()
+            try:
+                picture = Picture()
+                picture.data = self.capa_final
+                picture.type = 17
+                picture.mime = u'image/jpeg'
+                picture.width = 300
+                picture.height = 300
+                picture.depth = 2
+
+                picture_data = picture.write()
+                encoded_data = base64.b64encode(picture_data)
+                vcomment_value = encoded_data.decode('ascii')
+                audio["metadata_block_picture"] = [vcomment_value]
+                audio.save()
+            except Exception as e:
+                print(f'[ERROR] Unable to change cover: {e}')
         if len(titulo) > 0:
             audio[tags[titulo_tag]] = titulo
         if len(artista) > 0:
