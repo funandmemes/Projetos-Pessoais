@@ -19,7 +19,7 @@ Ou instale todas de uma vez:
 > pip install pillow mutagen eyed3
 '''
 __author__='funandmemes'
-__version__='0.1.0'
+__version__='0.1.1'
 
 import os
 from tkinter import *
